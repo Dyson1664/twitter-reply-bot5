@@ -12,19 +12,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Load your Twitter and Airtable API keys (preferably from environment variables, config file, or within the railyway app)
-TWITTER_API_KEY = os.getenv("TWITTER_API_KEY", "YourKey")
-TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET", "YourKey")
-TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN", "YourKey")
-TWITTER_ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET", "YourKey")
-TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN", "YourKey")
+TWITTER_API_KEY = os.getenv("TWITTER_API_KEY")
+TWITTER_API_SECRET = os.getenv("TWITTER_API_SECRET")
+TWITTER_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
+TWITTER_ACCESS_TOKEN_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
+TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
 
-AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY", "YourKey")
-AIRTABLE_BASE_KEY = os.getenv("AIRTABLE_BASE_KEY", "YourKey")
-AIRTABLE_TABLE_NAME = os.getenv("AIRTABLE_TABLE_NAME", "YourKey")
+AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY")
+AIRTABLE_BASE_KEY = os.getenv("AIRTABLE_BASE_KEY")
+AIRTABLE_TABLE_NAME = os.getenv("AIRTABLE_TABLE_NAME")
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "YourKey")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# TwitterBot class to help us organize our code and manage shared state
+
+#TwitterBot class to help us organize our code and manage shared state
 class TwitterBot:
     def __init__(self):
         self.twitter_api = tweepy.Client(bearer_token=TWITTER_BEARER_TOKEN,
@@ -39,7 +40,7 @@ class TwitterBot:
         self.tweet_response_limit = 35 # How many tweets to respond to each time the program wakes up
 
         # Initialize the language model w/ temperature of .5 to induce some creativity
-        self.llm = ChatOpenAI(temperature=.5, openai_api_key=OPENAI_API_KEY, model_name='gpt-4')
+        self.llm = ChatOpenAI(temperature=.5, openai_api_key=OPENAI_API_KEY, model_name='gpt-3.5-turbo')
 
         # For statics tracking for each run. This is not persisted anywhere, just logging
         self.mentions_found = 0
@@ -53,18 +54,18 @@ class TwitterBot:
         system_template = """
             You are an incredibly wise and smart tech mad scientist from silicon valley.
             Your goal is to give a concise prediction in response to a piece of text from the user.
-            
+
             % RESPONSE TONE:
 
             - Your prediction should be given in an active voice and be opinionated
             - Your tone should be serious w/ a hint of wit and sarcasm
-            
+
             % RESPONSE FORMAT:
 
             - Respond in under 200 characters
             - Respond in two or less short sentences
             - Do not respond with emojis
-            
+
             % RESPONSE CONTENT:
 
             - Include specific examples of old tech if they are relevant
@@ -80,13 +81,13 @@ class TwitterBot:
         # get a chat completion from the formatted messages
         final_prompt = chat_prompt.format_prompt(text=mentioned_conversation_tweet_text).to_messages()
         response = self.llm(final_prompt).content
-        
+
         return response
-    
+
         # Generate a response using the language model
     def respond_to_mention(self, mention, mentioned_conversation_tweet):
         response_text = self.generate_response(mentioned_conversation_tweet.text)
-        
+
         # Try and create the response to the tweet. If it fails, log it and move on
         try:
             response_tweet = self.twitter_api.create_tweet(text=response_text, in_reply_to_tweet_id=mention.id)
@@ -95,7 +96,7 @@ class TwitterBot:
             print (e)
             self.mentions_replied_errors += 1
             return
-        
+
         # Log the response in airtable if it was successful
         self.airtable.insert({
             'mentioned_conversation_tweet_id': str(mentioned_conversation_tweet.id),
@@ -106,11 +107,11 @@ class TwitterBot:
             'mentioned_at' : mention.created_at.isoformat()
         })
         return True
-    
+
     # Returns the ID of the authenticated user for tweet creation purposes
     def get_me_id(self):
         return self.twitter_api.get_me()[0].id
-    
+
     # Returns the parent tweet text of a mention if it exists. Otherwise returns None
     # We use this to since we want to respond to the parent tweet, not the mention itself
     def get_mention_conversation_tweet(self, mention):
@@ -132,7 +133,7 @@ class TwitterBot:
 
         # Convert to required string format
         start_time_str = start_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        
+
         return self.twitter_api.get_users_mentions(id=self.twitter_me_id,
                                                    start_time=start_time_str,
                                                    expansions=['referenced_tweets.id'],
@@ -154,20 +155,20 @@ class TwitterBot:
         if not mentions:
             print("No mentions found")
             return
-        
+
         self.mentions_found = len(mentions)
 
         for mention in mentions[:self.tweet_response_limit]:
             # Getting the mention's conversation tweet
             mentioned_conversation_tweet = self.get_mention_conversation_tweet(mention)
-            
+
             # If the mention *is* the conversation or you've already responded, skip it and don't respond
             if (mentioned_conversation_tweet.id != mention.id
                 and not self.check_already_responded(mentioned_conversation_tweet.id)):
 
                 self.respond_to_mention(mention, mentioned_conversation_tweet)
         return True
-    
+
         # The main entry point for the bot with some logging
     def execute_replies(self):
         print (f"Starting Job: {datetime.utcnow().isoformat()}")
@@ -182,7 +183,7 @@ def job():
 
 if __name__ == "__main__":
     # Schedule the job to run every 5 minutes. Edit to your liking, but watch out for rate limits
-    schedule.every(6).minutes.do(job)
+    schedule.every(1).minutes.do(job)
     while True:
         schedule.run_pending()
         time.sleep(1)
